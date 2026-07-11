@@ -4,6 +4,8 @@ import { useMemo, useState } from 'react';
 import Image from 'next/image';
 import { DifficultyDial, DonenessDial } from '@/components/ui/doneness-dial';
 import { Button } from '@/components/ui/button';
+import { LikeButton } from '@/components/social/LikeButton';
+import { CommentThread } from '@/components/social/CommentThread';
 import type { RecipeDetail } from '@/lib/types';
 
 export function RecipeDetailClient({ recipe }: { recipe: RecipeDetail }) {
@@ -91,7 +93,15 @@ export function RecipeDetailClient({ recipe }: { recipe: RecipeDetail }) {
               </p>
             )}
           </div>
-          <DifficultyDial difficulty={recipe.difficulty} size={48} />
+          <div className="flex flex-col items-end gap-2">
+            <DifficultyDial difficulty={recipe.difficulty} size={48} />
+            <LikeButton
+              likeableType="recipe"
+              likeableId={recipe.id}
+              initialLiked={recipe.is_liked}
+              initialCount={recipe.like_count}
+            />
+          </div>
         </div>
 
         {recipe.description && <p className="mt-3 text-sm">{recipe.description}</p>}
@@ -156,6 +166,8 @@ export function RecipeDetailClient({ recipe }: { recipe: RecipeDetail }) {
             </p>
           </>
         )}
+
+        <CommentThread commentableType="recipe" commentableId={recipe.id} />
       </div>
 
       {/* Sticky action bar: one primary action, two secondary — per the design
