@@ -55,4 +55,5 @@ export interface RecipeDetail extends RecipeCardData {
   recipe_steps: RecipeStep[];
   recipe_nutrition: RecipeNutrition | null;
   tags: { id: string; name: string; slug: string }[];
+  is_liked: boolean;
 }
