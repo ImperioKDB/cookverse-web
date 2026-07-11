@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light dark;
+}
+
+body {
+  @apply bg-flour text-[#241E1A] antialiased dark:bg-char dark:text-flour;
+}
+
+/* Focus ring token from 06-design-system.md: 2px chili outline, 2px offset,
+   applied consistently rather than each component restyling its own. */
+:focus-visible {
+  outline: 2px solid #c7401f;
+  outline-offset: 2px;
+}
