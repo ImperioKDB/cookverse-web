@@ -1,9 +1,9 @@
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { FollowButton } from '@/components/social/FollowButton';
 import { RecipeCard } from '@/components/recipe/RecipeCard';
-import { AvatarUpload } from '@/components/profile/AvatarUpload';
 import type { RecipeCardData } from '@/lib/types';
 
 interface Profile {
@@ -50,22 +50,15 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="flex items-start gap-4">
-        {isOwnProfile ? (
-          <AvatarUpload
-            initialAvatarUrl={profile.avatar_url}
-            displayName={profile.full_name || profile.username}
-          />
-        ) : (
-          <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full bg-copper/10">
-            {profile.avatar_url ? (
-              <Image src={profile.avatar_url} alt={profile.username} fill className="object-cover" />
-            ) : (
-              <div className="flex h-full items-center justify-center font-display text-2xl text-copper/50">
-                {profile.username.slice(0, 1).toUpperCase()}
-              </div>
-            )}
-          </div>
-        )}
+        <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full bg-copper/10">
+          {profile.avatar_url ? (
+            <Image src={profile.avatar_url} alt={profile.username} fill className="object-cover" />
+          ) : (
+            <div className="flex h-full items-center justify-center font-display text-2xl text-copper/50">
+              {profile.username.slice(0, 1).toUpperCase()}
+            </div>
+          )}
+        </div>
         <div className="flex-1">
           <h1 className="font-display text-2xl">{profile.full_name || `@${profile.username}`}</h1>
           <p className="text-sm text-[#241E1A]/60 dark:text-flour/60">@{profile.username}</p>
@@ -78,6 +71,11 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
         </div>
         {!isOwnProfile && (
           <FollowButton username={profile.username} initialFollowing={profile.is_following} />
+        )}
+        {isOwnProfile && (
+          <Link href="/saved" className="text-sm font-medium text-chili">
+            Saved recipes →
+          </Link>
         )}
       </div>
 
