@@ -4,6 +4,9 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
+import { ErrorMessage } from '@/components/ui/error-message';
+import { NotificationRowSkeleton } from '@/components/ui/skeleton';
+import { relativeTime } from '@/lib/format';
 
 interface Notification {
   id: string;
@@ -95,13 +98,15 @@ export default function NotificationsPage() {
         )}
       </div>
 
-      {error && (
-        <p role="alert" className="mt-4 text-sm text-chili">
-          {error}
-        </p>
-      )}
+      <ErrorMessage className="mt-4">{error}</ErrorMessage>
 
-      {isLoading && <p className="mt-6 text-sm">Loading…</p>}
+      {isLoading && (
+        <div className="mt-4 divide-y divide-copper/15" aria-busy="true" aria-label="Loading notifications">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <NotificationRowSkeleton key={i} />
+          ))}
+        </div>
+      )}
 
       {!isLoading && notifications.length === 0 && (
         <p className="mt-6 text-sm text-[#241E1A]/60 dark:text-flour/60">
@@ -123,7 +128,7 @@ export default function NotificationsPage() {
               <span className="flex shrink-0 items-center gap-2">
                 {!notification.is_read && <span className="h-2 w-2 rounded-full bg-chili" />}
                 <span className="font-mono text-xs text-[#241E1A]/50 dark:text-flour/50">
-                  {new Date(notification.created_at).toLocaleDateString()}
+                  {relativeTime(notification.created_at)}
                 </span>
               </span>
             </Link>
