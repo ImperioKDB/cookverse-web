@@ -3,9 +3,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import { apiFetch } from '@/lib/api-client';
 import { RecipeCard } from '@/components/recipe/RecipeCard';
+import { RecipeGridSkeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
-import { ErrorMessage } from '@/components/ui/error-message';
-import { ChipsSkeleton, RecipeCardSkeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import type { RecipeCardData, Difficulty } from '@/lib/types';
 
@@ -25,7 +24,6 @@ const DIFFICULTIES: { value: Difficulty; label: string }[] = [
 export default function DiscoverPage() {
   const [query, setQuery] = useState('');
   const [cuisines, setCuisines] = useState<Cuisine[]>([]);
-  const [isLoadingCuisines, setIsLoadingCuisines] = useState(true);
   const [cuisineFilter, setCuisineFilter] = useState<string | null>(null);
   const [difficultyFilter, setDifficultyFilter] = useState<Difficulty | null>(null);
   const [sort, setSort] = useState<'new' | 'trending'>('new');
@@ -39,8 +37,7 @@ export default function DiscoverPage() {
       .catch(() => {
         /* filter chips just won't render if this fails — search/browsing
            still works without them, so we don't block the page on it. */
-      })
-      .finally(() => setIsLoadingCuisines(false));
+      });
   }, []);
 
   const loadRecipes = useCallback(async () => {
@@ -80,22 +77,18 @@ export default function DiscoverPage() {
       />
 
       <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-        {isLoadingCuisines ? (
-          <ChipsSkeleton />
-        ) : (
-          cuisines.map((cuisine) => (
-            <button
-              key={cuisine.id}
-              onClick={() => setCuisineFilter((current) => (current === cuisine.slug ? null : cuisine.slug))}
-              className={cn(
-                'min-h-[36px] shrink-0 rounded-sm border px-3 py-1 text-sm',
-                cuisineFilter === cuisine.slug ? 'border-chili text-chili' : 'border-copper/30'
-              )}
-            >
-              {cuisine.name}
-            </button>
-          ))
-        )}
+        {cuisines.map((cuisine) => (
+          <button
+            key={cuisine.id}
+            onClick={() => setCuisineFilter((current) => (current === cuisine.slug ? null : cuisine.slug))}
+            className={cn(
+              'min-h-[36px] shrink-0 rounded-sm border px-3 py-1 text-sm',
+              cuisineFilter === cuisine.slug ? 'border-chili text-chili' : 'border-copper/30'
+            )}
+          >
+            {cuisine.name}
+          </button>
+        ))}
       </div>
 
       <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
@@ -119,19 +112,13 @@ export default function DiscoverPage() {
         </button>
       </div>
 
-      <ErrorMessage className="mt-6">{error}</ErrorMessage>
-
-      {!error && isLoading && recipes.length === 0 && (
-        <div
-          className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4"
-          aria-busy="true"
-          aria-label="Loading recipes"
-        >
-          {Array.from({ length: 8 }).map((_, i) => (
-            <RecipeCardSkeleton key={i} />
-          ))}
-        </div>
+      {error && (
+        <p role="alert" className="mt-6 text-sm text-chili">
+          {error}
+        </p>
       )}
+
+      {!error && isLoading && <RecipeGridSkeleton />}
 
       {!error && !isLoading && recipes.length === 0 && (
         <p className="mt-6 text-sm text-[#241E1A]/60 dark:text-flour/60">
