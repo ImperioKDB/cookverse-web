@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/api-client';
 import { RecipeCard } from '@/components/recipe/RecipeCard';
+import { RecipeGridSkeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import type { RecipeCardData } from '@/lib/types';
 
@@ -29,7 +30,7 @@ export default function SavedRecipesPage() {
         </p>
       )}
 
-      {isLoading && <p className="mt-6 text-sm">Loading…</p>}
+      {isLoading && <RecipeGridSkeleton />}
 
       {!isLoading && !error && recipes.length === 0 && (
         <div className="py-8">
