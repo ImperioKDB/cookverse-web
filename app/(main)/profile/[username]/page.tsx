@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { FollowButton } from '@/components/social/FollowButton';
 import { RecipeCard } from '@/components/recipe/RecipeCard';
@@ -70,6 +71,11 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
         </div>
         {!isOwnProfile && (
           <FollowButton username={profile.username} initialFollowing={profile.is_following} />
+        )}
+        {isOwnProfile && (
+          <Link href="/saved" className="text-sm font-medium text-chili">
+            Saved recipes →
+          </Link>
         )}
       </div>
 
