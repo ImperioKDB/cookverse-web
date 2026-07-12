@@ -3,9 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api-client';
+import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
-import { ChipsSkeleton } from '@/components/ui/skeleton';
-import { AvatarUpload } from '@/components/profile/AvatarUpload';
+import { ChipRowSkeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 
 const SKILL_LEVELS = [
@@ -27,20 +27,24 @@ interface Cuisine {
 export default function OnboardingPage() {
   const router = useRouter();
   const [fullName, setFullName] = useState('');
-  const [nameError, setNameError] = useState<string | null>(null);
   const [skillLevel, setSkillLevel] = useState<SkillLevel>('beginner');
   const [cuisines, setCuisines] = useState<Cuisine[]>([]);
-  const [isLoadingCuisines, setIsLoadingCuisines] = useState(true);
   const [selectedCuisineIds, setSelectedCuisineIds] = useState<string[]>([]);
+  const [cuisinesLoading, setCuisinesLoading] = useState(true);
   const [cuisinesError, setCuisinesError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
 
   useEffect(() => {
     apiFetch<{ cuisines: Cuisine[] }>('/v1/cuisines')
       .then((data) => setCuisines(data.cuisines))
       .catch((err) => setCuisinesError(err instanceof Error ? err.message : 'Could not load cuisines'))
-      .finally(() => setIsLoadingCuisines(false));
+      .finally(() => setCuisinesLoading(false));
   }, []);
 
   function toggleCuisine(id: string) {
@@ -49,25 +53,48 @@ export default function OnboardingPage() {
     );
   }
 
+  async function handleAvatarChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setAvatarPreviewUrl(URL.createObjectURL(file)); // instant preview, don't wait on the upload
+    setIsUploadingAvatar(true);
+    setAvatarError(null);
+
+    try {
+      const { signedUrl, path } = await apiFetch<{ signedUrl: string; path: string }>(
+        '/v1/profiles/me/avatar/upload-url',
+        { method: 'POST', body: JSON.stringify({ filename: file.name }) }
+      );
+
+      const supabase = createClient();
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .uploadToSignedUrl(path, new URL(signedUrl).searchParams.get('token') ?? '', file);
+      if (uploadError) throw uploadError;
+
+      const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(path);
+      setAvatarUrl(publicUrlData.publicUrl);
+    } catch (err) {
+      setAvatarError(err instanceof Error ? err.message : 'Photo upload failed — you can add one later');
+    } finally {
+      setIsUploadingAvatar(false);
+    }
+  }
+
   async function handleSubmit(event: React.FormEvent) {
     event.preventDefault();
     setSubmitError(null);
-    setNameError(null);
-
-    if (!fullName.trim()) {
-      setNameError('Tell us what to call you');
-      return;
-    }
-
     setIsLoading(true);
 
     try {
       await apiFetch('/v1/profiles/me', {
         method: 'PATCH',
         body: JSON.stringify({
-          full_name: fullName.trim(),
+          full_name: fullName.trim() || undefined,
           skill_level: skillLevel,
           cuisine_ids: selectedCuisineIds,
+          avatar_url: avatarUrl ?? undefined,
         }),
       });
       router.push('/feed');
@@ -82,39 +109,45 @@ export default function OnboardingPage() {
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="font-display text-3xl">How do you cook?</h1>
+        <h1 className="font-display text-3xl">Let's set up your kitchen</h1>
         <p className="mt-1 text-sm text-[#241E1A]/70 dark:text-flour/70">
-          This shapes what we show you first — you can change it anytime.
+          This shapes what we show you first — you can change any of it anytime.
         </p>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">
-        <div>
-          <label htmlFor="full-name" className="text-sm font-medium">
-            What should we call you?
+        <div className="flex items-center gap-4">
+          <label
+            htmlFor="avatar"
+            className="relative flex h-16 w-16 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-copper/30 bg-copper/10"
+          >
+            {avatarPreviewUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element -- local object URL, not worth Next/Image here
+              <img src={avatarPreviewUrl} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <span className="text-xs text-[#241E1A]/50 dark:text-flour/50">Add photo</span>
+            )}
+            <input
+              id="avatar"
+              type="file"
+              accept="image/*"
+              onChange={handleAvatarChange}
+              className="sr-only"
+            />
           </label>
-          <input
-            id="full-name"
-            value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
-            placeholder="Your name"
-            autoFocus
-            className="mt-2 w-full rounded-sm border border-copper/30 bg-transparent px-3 py-2 text-base"
-          />
-          {nameError && (
-            <p role="alert" className="mt-1 text-sm text-chili">
-              {nameError}
-            </p>
-          )}
-          <p className="mt-1 text-xs text-[#241E1A]/60 dark:text-flour/60">
-            Shown on your profile instead of @username.
-          </p>
-        </div>
-
-        <div>
-          <span className="text-sm font-medium">Profile photo (optional)</span>
-          <div className="mt-2">
-            <AvatarUpload initialAvatarUrl={null} displayName={fullName || 'You'} size="md" />
+          <div className="flex-1">
+            <label htmlFor="fullName" className="block text-sm font-medium">
+              Your name
+            </label>
+            <input
+              id="fullName"
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+              placeholder="What should we call you?"
+              className="mt-1 w-full rounded-sm border border-copper/30 bg-transparent px-3 py-2 text-base"
+            />
+            {isUploadingAvatar && <p className="mt-1 text-xs">Uploading photo…</p>}
+            {avatarError && <p className="mt-1 text-xs text-chili">{avatarError}</p>}
           </div>
         </div>
 
@@ -147,31 +180,31 @@ export default function OnboardingPage() {
               {cuisinesError}
             </p>
           )}
-          {isLoadingCuisines ? (
-            <div className="mt-2">
-              <ChipsSkeleton />
-            </div>
-          ) : (
-            <div className="mt-2 flex flex-wrap gap-2">
-              {cuisines.map((cuisine) => {
-                const selected = selectedCuisineIds.includes(cuisine.id);
-                return (
-                  <button
-                    key={cuisine.id}
-                    type="button"
-                    onClick={() => toggleCuisine(cuisine.id)}
-                    aria-pressed={selected}
-                    className={cn(
-                      'min-h-[44px] rounded-sm border px-3 py-2 text-sm font-medium',
-                      selected ? 'border-chili bg-chili text-flour' : 'border-copper/30'
-                    )}
-                  >
-                    {cuisine.name}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          <div className="mt-2">
+            {cuisinesLoading ? (
+              <ChipRowSkeleton />
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {cuisines.map((cuisine) => {
+                  const selected = selectedCuisineIds.includes(cuisine.id);
+                  return (
+                    <button
+                      key={cuisine.id}
+                      type="button"
+                      onClick={() => toggleCuisine(cuisine.id)}
+                      aria-pressed={selected}
+                      className={cn(
+                        'min-h-[44px] rounded-sm border px-3 py-2 text-sm font-medium',
+                        selected ? 'border-chili bg-chili text-flour' : 'border-copper/30'
+                      )}
+                    >
+                      {cuisine.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </fieldset>
 
         {submitError && (
