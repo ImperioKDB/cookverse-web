@@ -30,6 +30,22 @@ export function NotificationRowSkeleton() {
   );
 }
 
+/**
+ * A row of pill-shaped placeholders standing in for cuisine/filter chips.
+ * Varied widths (not one uniform gray bar) so it reads as "chips are about
+ * to appear" rather than a generic loading block.
+ */
+export function ChipsSkeleton({ count = 6 }: { count?: number }) {
+  const widths = ['w-16', 'w-20', 'w-14', 'w-24', 'w-16', 'w-20', 'w-14', 'w-20'];
+  return (
+    <div className="flex flex-wrap gap-2" aria-busy="true" aria-label="Loading options">
+      {Array.from({ length: count }).map((_, i) => (
+        <Skeleton key={i} className={cn('h-9 rounded-sm', widths[i % widths.length])} />
+      ))}
+    </div>
+  );
+}
+
 /** Placeholder shaped like a comment row. */
 export function CommentRowSkeleton() {
   return (
