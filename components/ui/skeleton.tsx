@@ -1,60 +1,48 @@
 import { cn } from '@/lib/utils';
 
 /**
- * Base pulsing block. Same bg-copper/10 tone RecipeCard already uses for its
- * image placeholder, so a loading screen and a real one share a surface
- * color instead of the skeleton looking like a different, greyer product.
+ * Base pulse block — per 06-design-system.md, every skeleton matches its
+ * real content's shape exactly (same aspect ratio, same rounded corners)
+ * so nothing jumps when the real content resolves.
  */
-export function Skeleton({ className }: { className?: string }) {
-  return <div className={cn('animate-pulse rounded-sm bg-copper/10', className)} />;
+function Pulse({ className }: { className?: string }) {
+  return <div className={cn('animate-pulse rounded-sm bg-copper/15', className)} />;
 }
 
-/** Placeholder shaped like a RecipeCard, for the feed's initial load. */
-export function RecipeCardSkeleton() {
-  return (
-    <div>
-      <Skeleton className="aspect-[4/5] w-full" />
-      <Skeleton className="mt-2 h-4 w-3/4" />
-      <Skeleton className="mt-1.5 h-3 w-1/3" />
-    </div>
-  );
+/** Matches the shape of a cuisine/difficulty filter chip. */
+export function ChipSkeleton() {
+  return <Pulse className="h-11 w-24" />;
 }
 
-/** Placeholder shaped like a notification row. */
-export function NotificationRowSkeleton() {
+export function ChipRowSkeleton({ count = 6 }: { count?: number }) {
   return (
-    <div className="flex items-center justify-between gap-3 py-3">
-      <Skeleton className="h-4 w-2/3" />
-      <Skeleton className="h-3 w-10" />
-    </div>
-  );
-}
-
-/**
- * A row of pill-shaped placeholders standing in for cuisine/filter chips.
- * Varied widths (not one uniform gray bar) so it reads as "chips are about
- * to appear" rather than a generic loading block.
- */
-export function ChipsSkeleton({ count = 6 }: { count?: number }) {
-  const widths = ['w-16', 'w-20', 'w-14', 'w-24', 'w-16', 'w-20', 'w-14', 'w-20'];
-  return (
-    <div className="flex flex-wrap gap-2" aria-busy="true" aria-label="Loading options">
+    <div className="flex flex-wrap gap-2" aria-label="Loading options" role="status">
       {Array.from({ length: count }).map((_, i) => (
-        <Skeleton key={i} className={cn('h-9 rounded-sm', widths[i % widths.length])} />
+        <ChipSkeleton key={i} />
       ))}
     </div>
   );
 }
 
-/** Placeholder shaped like a comment row. */
-export function CommentRowSkeleton() {
+/** Matches RecipeCard's aspect-[4/5] image + two text lines. */
+export function RecipeCardSkeleton() {
   return (
-    <div>
-      <div className="flex items-baseline gap-2">
-        <Skeleton className="h-3.5 w-20" />
-        <Skeleton className="h-3 w-10" />
+    <div className="overflow-hidden rounded-sm border border-copper/20">
+      <Pulse className="aspect-[4/5] w-full rounded-none" />
+      <div className="space-y-2 p-3">
+        <Pulse className="h-4 w-3/4" />
+        <Pulse className="h-3 w-1/3" />
       </div>
-      <Skeleton className="mt-1.5 h-3.5 w-5/6" />
+    </div>
+  );
+}
+
+export function RecipeGridSkeleton({ count = 8 }: { count?: number }) {
+  return (
+    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4" aria-label="Loading recipes" role="status">
+      {Array.from({ length: count }).map((_, i) => (
+        <RecipeCardSkeleton key={i} />
+      ))}
     </div>
   );
 }
