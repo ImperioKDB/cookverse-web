@@ -40,6 +40,27 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
   ({ className, variant, size, isLoading, asChild, children, disabled, ...props }, ref) => {
     const Comp = asChild ? Slot : 'button';
 
+    // asChild wraps a single, caller-provided element (e.g. <Link>), and
+    // Radix Slot requires exactly one element child — swapping it for a
+    // loading string throws. Native <button> usage can safely take a
+    // Fragment with a spinner alongside the real children. So: asChild
+    // passes children through untouched (disabled/aria-busy still apply,
+    // isLoading + asChild just isn't a "show a spinner" combination); the
+    // plain-button path gets a real spinner instead of replacing content.
+    const content = asChild ? (
+      children
+    ) : (
+      <>
+        {isLoading && (
+          <span
+            aria-hidden="true"
+            className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent"
+          />
+        )}
+        {children}
+      </>
+    );
+
     return (
       <Comp
         className={cn(buttonVariants({ variant, size }), className)}
@@ -48,7 +69,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         aria-busy={isLoading}
         {...props}
       >
-        {isLoading ? 'Loading…' : children}
+        {content}
       </Comp>
     );
   }
