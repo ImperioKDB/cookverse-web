@@ -4,6 +4,10 @@ import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api-client';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
+import { ErrorMessage } from '@/components/ui/error-message';
+import { CommentRowSkeleton } from '@/components/ui/skeleton';
+import { relativeTime } from '@/lib/format';
+import { cn } from '@/lib/utils';
 
 interface Comment {
   id: string;
@@ -58,7 +62,7 @@ export function CommentThread({ commentableType, commentableId }: CommentThreadP
   }, [commentableType, commentableId]);
 
   async function postComment(body: string, parentCommentId?: string) {
-    if (!body.trim()) return;
+    if (!body.trim() || isPosting) return;
     setIsPosting(true);
     setError(null);
     try {
@@ -95,25 +99,27 @@ export function CommentThread({ commentableType, commentableId }: CommentThreadP
     <div className="mt-6">
       <h2 className="font-display text-xl">Comments</h2>
 
-      <div className="mt-3 flex gap-2">
-        <input
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          placeholder="Add a comment..."
-          className="flex-1 rounded-sm border border-copper/30 bg-transparent px-3 py-2 text-sm"
-        />
-        <Button size="sm" isLoading={isPosting} onClick={() => postComment(newComment)}>
-          Post
-        </Button>
-      </div>
+      <CommentComposer
+        value={newComment}
+        onChange={setNewComment}
+        onSubmit={() => postComment(newComment)}
+        isPosting={isPosting}
+        placeholder="Add a comment..."
+        submitLabel="Post"
+        className="mt-3"
+      />
 
-      {error && (
-        <p role="alert" className="mt-2 text-sm text-chili">
-          {error}
-        </p>
+      <ErrorMessage className="mt-2">{error}</ErrorMessage>
+
+      {isLoading && (
+        <ul className="mt-4 space-y-4" aria-busy="true" aria-label="Loading comments">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <li key={i}>
+              <CommentRowSkeleton />
+            </li>
+          ))}
+        </ul>
       )}
-
-      {isLoading && <p className="mt-4 text-sm">Loading comments…</p>}
 
       {!isLoading && comments.length === 0 && (
         <p className="mt-4 text-sm text-[#241E1A]/60 dark:text-flour/60">
@@ -132,16 +138,16 @@ export function CommentThread({ commentableType, commentableId }: CommentThreadP
             />
 
             {replyingTo === comment.id && (
-              <div className="mt-2 ml-8 flex gap-2">
-                <input
+              <div className="mt-2 ml-8">
+                <CommentComposer
                   value={replyBody}
-                  onChange={(e) => setReplyBody(e.target.value)}
+                  onChange={setReplyBody}
+                  onSubmit={() => postComment(replyBody, comment.id)}
+                  isPosting={isPosting}
                   placeholder={`Reply to @${comment.author?.username ?? 'them'}...`}
-                  className="flex-1 rounded-sm border border-copper/30 bg-transparent px-3 py-2 text-sm"
+                  submitLabel="Reply"
+                  autoFocus
                 />
-                <Button size="sm" isLoading={isPosting} onClick={() => postComment(replyBody, comment.id)}>
-                  Reply
-                </Button>
               </div>
             )}
 
@@ -165,6 +171,54 @@ export function CommentThread({ commentableType, commentableId }: CommentThreadP
   );
 }
 
+function CommentComposer({
+  value,
+  onChange,
+  onSubmit,
+  isPosting,
+  placeholder,
+  submitLabel,
+  autoFocus,
+  className,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
+  isPosting: boolean;
+  placeholder: string;
+  submitLabel: string;
+  autoFocus?: boolean;
+  className?: string;
+}) {
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // Comments are short-form but occasionally multi-line, so this is a
+    // textarea rather than a single-line input — Enter submits (matching
+    // what a single-line input would have done), Shift+Enter adds a line.
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      onSubmit();
+    }
+  }
+
+  return (
+    <div className={cn('flex gap-2', className)}>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        disabled={isPosting}
+        autoFocus={autoFocus}
+        rows={1}
+        className="flex-1 resize-none rounded-sm border border-copper/30 bg-transparent px-3 py-2 text-sm disabled:opacity-60"
+      />
+      <Button size="sm" isLoading={isPosting} onClick={onSubmit}>
+        {submitLabel}
+      </Button>
+    </div>
+  );
+}
+
 function CommentRow({
   comment,
   currentUserId,
@@ -181,7 +235,7 @@ function CommentRow({
       <div className="flex items-baseline gap-2">
         <span className="font-medium">@{comment.author?.username ?? 'unknown'}</span>
         <span className="font-mono text-xs text-[#241E1A]/50 dark:text-flour/50">
-          {new Date(comment.created_at).toLocaleDateString()}
+          {relativeTime(comment.created_at)}
         </span>
       </div>
       <p className="mt-0.5">{comment.body}</p>
