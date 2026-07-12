@@ -15,24 +15,21 @@ interface SaveButtonProps {
 
 export function SaveButton({ recipeId, initialSaved, variant = 'secondary', className }: SaveButtonProps) {
   const [saved, setSaved] = useState(initialSaved);
-  const [isLoading, setIsLoading] = useState(false);
 
   async function toggle() {
-    setIsLoading(true);
+    // Optimistic, reverted on failure — consistent with Like/Follow now.
     const next = !saved;
+    setSaved(next);
 
     try {
       await apiFetch(`/v1/recipes/${recipeId}/save`, { method: next ? 'POST' : 'DELETE' });
-      setSaved(next);
     } catch {
-      // no optimistic flip to revert here — state only changes on confirmed success
-    } finally {
-      setIsLoading(false);
+      setSaved(!next);
     }
   }
 
   return (
-    <Button variant={variant} isLoading={isLoading} onClick={toggle} className={cn('gap-1.5', className)}>
+    <Button variant={variant} onClick={toggle} className={cn('gap-1.5', className)}>
       <Bookmark className={cn('h-4 w-4', saved && 'fill-current')} strokeWidth={1.5} />
       {saved ? 'Saved' : 'Save'}
     </Button>
