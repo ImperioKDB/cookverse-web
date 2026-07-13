@@ -3,7 +3,6 @@
 import { useState } from 'react';
 import { apiFetch } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
-import { ErrorMessage } from '@/components/ui/error-message';
 
 interface FollowButtonProps {
   username: string;
@@ -12,29 +11,34 @@ interface FollowButtonProps {
 
 export function FollowButton({ username, initialFollowing }: FollowButtonProps) {
   const [following, setFollowing] = useState(initialFollowing);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function toggle() {
-    // Optimistic: flip immediately, revert on failure — same pattern as
-    // LikeButton, no spinner needed for something this fast to reverse.
-    const next = !following;
-    setFollowing(next);
+    setIsLoading(true);
     setError(null);
+    const next = !following;
 
     try {
       await apiFetch(`/v1/profiles/${username}/follow`, { method: next ? 'POST' : 'DELETE' });
+      setFollowing(next);
     } catch (err) {
-      setFollowing(!next);
       setError(err instanceof Error ? err.message : 'Could not update — try again');
+    } finally {
+      setIsLoading(false);
     }
   }
 
   return (
     <div>
-      <Button variant={following ? 'secondary' : 'primary'} onClick={toggle}>
+      <Button variant={following ? 'secondary' : 'primary'} isLoading={isLoading} onClick={toggle}>
         {following ? 'Following' : 'Follow'}
       </Button>
-      <ErrorMessage className="mt-1 text-xs">{error}</ErrorMessage>
+      {error && (
+        <p role="alert" className="mt-1 text-xs text-chili">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
