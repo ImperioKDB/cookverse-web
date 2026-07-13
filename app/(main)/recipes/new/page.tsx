@@ -6,6 +6,7 @@ import { apiFetch } from '@/lib/api-client';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { DifficultyDial } from '@/components/ui/doneness-dial';
+import { ErrorMessage } from '@/components/ui/error-message';
 import { cn } from '@/lib/utils';
 import type { Difficulty, RecipeIngredient, RecipeStep } from '@/lib/types';
 
@@ -142,11 +143,7 @@ export default function NewRecipePage() {
         />
       </div>
 
-      {error && (
-        <p role="alert" className="mt-4 text-sm text-chili">
-          {error}
-        </p>
-      )}
+      <ErrorMessage className="mt-4">{error}</ErrorMessage>
 
       {stepIndex === 0 && (
         <div className="mt-6 space-y-4">
