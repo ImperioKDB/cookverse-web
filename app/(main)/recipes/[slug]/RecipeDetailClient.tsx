@@ -5,6 +5,7 @@ import Image from 'next/image';
 import { DifficultyDial, DonenessDial } from '@/components/ui/doneness-dial';
 import { Button } from '@/components/ui/button';
 import { LikeButton } from '@/components/social/LikeButton';
+import { SaveButton } from '@/components/social/SaveButton';
 import { CommentThread } from '@/components/social/CommentThread';
 import type { RecipeDetail } from '@/lib/types';
 
@@ -171,13 +172,10 @@ export function RecipeDetailClient({ recipe }: { recipe: RecipeDetail }) {
       </div>
 
       {/* Sticky action bar: one primary action, two secondary — per the design
-          audit fix in 11-design-audit.md. */}
+          audit fix in 11-design-audit.md. Save is real now (Collections
+          shipped); Add to Plan stays disabled until meal planning exists. */}
       <div className="fixed inset-x-0 bottom-0 z-20 flex gap-2 border-t border-copper/20 bg-flour p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] dark:bg-char lg:static lg:col-span-2 lg:mt-8 lg:border-0 lg:bg-transparent lg:p-0 lg:pb-0">
-        {/* Collections and meal planning are the next slice, not this one —
-            disabled rather than a silently-broken-looking live button. */}
-        <Button variant="secondary" className="flex-1" disabled title="Coming soon">
-          Save
-        </Button>
+        <SaveButton recipeId={recipe.id} initialSaved={recipe.is_saved} className="flex-1" />
         <Button variant="secondary" className="flex-1" disabled title="Coming soon">
           Add to Plan
         </Button>
