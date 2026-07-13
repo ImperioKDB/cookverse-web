@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { apiFetch } from '@/lib/api-client';
 import { RecipeCard } from '@/components/recipe/RecipeCard';
 import { RecipeGridSkeleton } from '@/components/ui/skeleton';
+import { ErrorMessage } from '@/components/ui/error-message';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { RecipeCardData, Difficulty } from '@/lib/types';
@@ -112,11 +113,7 @@ export default function DiscoverPage() {
         </button>
       </div>
 
-      {error && (
-        <p role="alert" className="mt-6 text-sm text-chili">
-          {error}
-        </p>
-      )}
+      <ErrorMessage className="mt-6">{error}</ErrorMessage>
 
       {!error && isLoading && <RecipeGridSkeleton />}
 
