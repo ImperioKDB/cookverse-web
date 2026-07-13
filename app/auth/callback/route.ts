@@ -8,30 +8,21 @@ export async function GET(request: Request) {
 
   if (code) {
     const supabase = await createClient();
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
 
-    if (!error) {
-      let destination = explicitNext;
+    if (!error && data.user) {
+      // The bug this fixes: every Google sign-in (new account or returning
+      // login — Supabase's OAuth flow doesn't distinguish them) used to
+      // default straight to /onboarding with no way to tell the two apart.
+      // Read the actual flag instead of assuming "no explicit destination
+      // means new user."
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('onboarding_completed')
+        .eq('id', data.user.id)
+        .maybeSingle();
 
-      if (!destination) {
-        // No caller-specified destination. Google OAuth is the sign-in path
-        // for both brand-new signups and returning logins — there's no way
-        // to tell which this is from the callback alone — so the old
-        // hardcoded '/onboarding' default sent every returning user back
-        // through onboarding on every single login. Decide from whether
-        // they've actually completed it (full_name gets set there and
-        // nowhere else) instead of assuming "new."
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-
-        const profile = user
-          ? await supabase.from('profiles').select('full_name').eq('id', user.id).maybeSingle()
-          : null;
-
-        destination = profile?.data?.full_name ? '/feed' : '/onboarding';
-      }
-
+      const destination = explicitNext ?? (profile?.onboarding_completed ? '/feed' : '/onboarding');
       return NextResponse.redirect(`${origin}${destination}`);
     }
   }
