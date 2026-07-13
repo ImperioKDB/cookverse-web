@@ -15,7 +15,7 @@ export function TopBar() {
     let cancelled = false;
 
     function poll() {
-      apiFetch<{ unread_count: number }>('/v1/notifications/unread-count')
+      apiFetch<{ unread_count: number }>('/v1/notifications?limit=1')
         .then((data) => {
           if (!cancelled) setUnreadCount(data.unread_count);
         })
