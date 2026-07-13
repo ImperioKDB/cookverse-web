@@ -4,6 +4,8 @@ import { useEffect, useState } from 'react';
 import { apiFetch } from '@/lib/api-client';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
+import { ErrorMessage } from '@/components/ui/error-message';
+import { relativeTime } from '@/lib/format';
 
 interface Comment {
   id: string;
@@ -153,11 +155,7 @@ export function CommentThread({ commentableType, commentableId }: CommentThreadP
         </Button>
       </div>
 
-      {error && (
-        <p role="alert" className="mt-2 text-sm text-chili">
-          {error}
-        </p>
-      )}
+      <ErrorMessage className="mt-2">{error}</ErrorMessage>
 
       {isLoading && <p className="mt-4 text-sm">Loading comments…</p>}
 
@@ -227,7 +225,7 @@ function CommentRow({
       <div className="flex items-baseline gap-2">
         <span className="font-medium">@{comment.author?.username ?? 'unknown'}</span>
         <span className="font-mono text-xs text-[#241E1A]/50 dark:text-flour/50">
-          {new Date(comment.created_at).toLocaleDateString()}
+          {relativeTime(comment.created_at)}
         </span>
       </div>
       <p className="mt-0.5">{comment.body}</p>
