@@ -48,11 +48,11 @@ export function AvatarUpload({ initialAvatarUrl, displayName, onUploaded, size =
 
       const supabase = createClient();
       const { error: uploadError } = await supabase.storage
-        .from('avatars')
+        .from('profile-avatars')
         .uploadToSignedUrl(path, new URL(signedUrl).searchParams.get('token') ?? '', file);
       if (uploadError) throw uploadError;
 
-      const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(path);
+      const { data: publicUrlData } = supabase.storage.from('profile-avatars').getPublicUrl(path);
       const publicUrl = publicUrlData.publicUrl;
 
       await apiFetch('/v1/profiles/me', {
