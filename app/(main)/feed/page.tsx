@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { apiFetch } from '@/lib/api-client';
 import { RecipeCard } from '@/components/recipe/RecipeCard';
-import { RecipeGridSkeleton } from '@/components/ui/skeleton';
-import { ErrorMessage } from '@/components/ui/error-message';
 import { Button } from '@/components/ui/button';
+import { ErrorMessage } from '@/components/ui/error-message';
+import { RecipeCardSkeleton } from '@/components/ui/skeleton';
 import type { RecipeCardData } from '@/lib/types';
 
 export default function FeedPage() {
@@ -45,7 +45,13 @@ export default function FeedPage() {
     <div className="mx-auto max-w-5xl px-4 py-8">
       <ErrorMessage>{error}</ErrorMessage>
 
-      {isLoading && recipes.length === 0 && <RecipeGridSkeleton />}
+      {isLoading && recipes.length === 0 && (
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4" aria-busy="true" aria-label="Loading your feed">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <RecipeCardSkeleton key={i} />
+          ))}
+        </div>
+      )}
 
       {/* Empty state is an invitation, not an apology — per 06-design-system.md's
           Voice guidelines, and per 13-handoff-feed-and-notifications.md's brief
