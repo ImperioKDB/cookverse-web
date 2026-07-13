@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { apiFetch } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
+import { ErrorMessage } from '@/components/ui/error-message';
 
 interface FollowButtonProps {
   username: string;
@@ -33,11 +34,7 @@ export function FollowButton({ username, initialFollowing }: FollowButtonProps) 
       <Button variant={following ? 'secondary' : 'primary'} onClick={toggle}>
         {following ? 'Following' : 'Follow'}
       </Button>
-      {error && (
-        <p role="alert" className="mt-1 text-xs text-chili">
-          {error}
-        </p>
-      )}
+      <ErrorMessage className="mt-1 text-xs">{error}</ErrorMessage>
     </div>
   );
 }
