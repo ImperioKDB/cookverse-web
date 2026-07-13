@@ -1,10 +1,11 @@
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
+import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { FollowButton } from '@/components/social/FollowButton';
-import { RecipeCard } from '@/components/recipe/RecipeCard';
+import { LogoutButton } from '@/components/social/LogoutButton';
 import { AvatarUpload } from '@/components/profile/AvatarUpload';
-import { LogoutButton } from '@/components/profile/LogoutButton';
+import { RecipeCard } from '@/components/recipe/RecipeCard';
 import type { RecipeCardData } from '@/lib/types';
 
 interface Profile {
@@ -38,10 +39,13 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
     data: { session },
   } = await supabase.auth.getSession();
 
+  // Profile and recipes don't depend on each other — fetching them
+  // sequentially was doubling this page's load time for no reason.
   const [profile, recipesData] = await Promise.all([
     fetchJson<Profile>(`/v1/profiles/${username}`, session?.access_token),
     fetchJson<{ recipes: RecipeCardData[] }>(`/v1/recipes?author=${username}&sort=new`, session?.access_token),
   ]);
+
   if (!profile) notFound();
 
   const isOwnProfile = session?.user.id === profile.id;
@@ -50,10 +54,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="flex items-start gap-4">
         {isOwnProfile ? (
-          <AvatarUpload
-            initialAvatarUrl={profile.avatar_url}
-            displayName={profile.full_name || profile.username}
-          />
+          <AvatarUpload initialAvatarUrl={profile.avatar_url} displayName={profile.full_name || profile.username} />
         ) : (
           <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full bg-copper/10">
             {profile.avatar_url ? (
@@ -75,11 +76,19 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
             <span>{profile.following_count} following</span>
           </div>
         </div>
-        {!isOwnProfile && (
-          <FollowButton username={profile.username} initialFollowing={profile.is_following} />
-        )}
-        {isOwnProfile && <LogoutButton />}
+        {!isOwnProfile && <FollowButton username={profile.username} initialFollowing={profile.is_following} />}
       </div>
+
+      {/* Account actions get their own clearly-spaced row instead of being
+          squeezed into the header — that's what was cramped before. */}
+      {isOwnProfile && (
+        <div className="mt-4 flex items-center justify-between border-y border-copper/15 py-3">
+          <Link href="/saved" className="text-sm font-medium text-chili">
+            Saved recipes →
+          </Link>
+          <LogoutButton />
+        </div>
+      )}
 
       <h2 className="mt-8 font-display text-xl">Recipes</h2>
       {!recipesData || recipesData.recipes.length === 0 ? (
