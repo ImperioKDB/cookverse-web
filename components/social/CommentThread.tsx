@@ -5,7 +5,9 @@ import { apiFetch } from '@/lib/api-client';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { ErrorMessage } from '@/components/ui/error-message';
+import { CommentRowSkeleton } from '@/components/ui/skeleton';
 import { relativeTime } from '@/lib/format';
+import { cn } from '@/lib/utils';
 
 interface Comment {
   id: string;
@@ -28,19 +30,13 @@ export function CommentThread({ commentableType, commentableId }: CommentThreadP
   const [newComment, setNewComment] = useState('');
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyBody, setReplyBody] = useState('');
-  const [currentUser, setCurrentUser] = useState<{ id: string; username: string; avatar_url: string | null } | null>(
-    null
-  );
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [isPosting, setIsPosting] = useState(false);
 
   useEffect(() => {
     createClient()
       .auth.getUser()
-      .then(({ data }) => {
-        if (!data.user) return;
-        apiFetch<{ username: string; avatar_url: string | null }>('/v1/profiles/me')
-          .then((profile) => setCurrentUser({ id: data.user!.id, ...profile }))
-          .catch(() => setCurrentUser({ id: data.user!.id, username: 'you', avatar_url: null }));
-      });
+      .then(({ data }) => setCurrentUserId(data.user?.id ?? null));
   }, []);
 
   async function loadComments() {
@@ -66,36 +62,9 @@ export function CommentThread({ commentableType, commentableId }: CommentThreadP
   }, [commentableType, commentableId]);
 
   async function postComment(body: string, parentCommentId?: string) {
-    if (!body.trim() || !currentUser) return;
-
-    // Optimistic: show the comment immediately with a temporary id, swap in
-    // the real one on success, remove it if the request actually fails —
-    // no more "post and wait for a full reload" round trip.
-    const tempId = `temp-${Date.now()}`;
-    const optimisticComment: Comment = {
-      id: tempId,
-      author_id: currentUser.id,
-      body,
-      created_at: new Date().toISOString(),
-      author: { username: currentUser.username, avatar_url: currentUser.avatar_url },
-      replies: [],
-    };
-
-    if (parentCommentId) {
-      setComments((current) =>
-        current.map((c) =>
-          c.id === parentCommentId ? { ...c, replies: [...c.replies, optimisticComment] } : c
-        )
-      );
-    } else {
-      setComments((current) => [optimisticComment, ...current]);
-    }
-
-    setNewComment('');
-    setReplyBody('');
-    setReplyingTo(null);
+    if (!body.trim() || isPosting) return;
+    setIsPosting(true);
     setError(null);
-
     try {
       await apiFetch('/v1/social/comments', {
         method: 'POST',
@@ -106,36 +75,23 @@ export function CommentThread({ commentableType, commentableId }: CommentThreadP
           body,
         }),
       });
-      await loadComments(); // reconcile temp id / ordering with the server's real state
+      setNewComment('');
+      setReplyBody('');
+      setReplyingTo(null);
+      await loadComments();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not post — try again');
-      // Roll back the optimistic insert.
-      setComments((current) =>
-        current
-          .filter((c) => c.id !== tempId)
-          .map((c) => ({ ...c, replies: c.replies.filter((r) => r.id !== tempId) }))
-      );
+    } finally {
+      setIsPosting(false);
     }
   }
 
-  async function deleteComment(id: string, parentId?: string) {
-    // Optimistic removal, restored on failure by just re-fetching — deletes
-    // are rare enough that a full reload-on-failure is simpler than hand
-    // -rolling the exact row back into state.
-    const previous = comments;
-    if (parentId) {
-      setComments((current) =>
-        current.map((c) => (c.id === parentId ? { ...c, replies: c.replies.filter((r) => r.id !== id) } : c))
-      );
-    } else {
-      setComments((current) => current.filter((c) => c.id !== id));
-    }
-
+  async function deleteComment(id: string) {
     try {
       await apiFetch(`/v1/social/comments/${id}`, { method: 'DELETE' });
+      await loadComments();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not delete');
-      setComments(previous);
     }
   }
 
@@ -143,21 +99,27 @@ export function CommentThread({ commentableType, commentableId }: CommentThreadP
     <div className="mt-6">
       <h2 className="font-display text-xl">Comments</h2>
 
-      <div className="mt-3 flex gap-2">
-        <input
-          value={newComment}
-          onChange={(e) => setNewComment(e.target.value)}
-          placeholder="Add a comment..."
-          className="flex-1 rounded-sm border border-copper/30 bg-transparent px-3 py-2 text-sm"
-        />
-        <Button size="sm" onClick={() => postComment(newComment)}>
-          Post
-        </Button>
-      </div>
+      <CommentComposer
+        value={newComment}
+        onChange={setNewComment}
+        onSubmit={() => postComment(newComment)}
+        isPosting={isPosting}
+        placeholder="Add a comment..."
+        submitLabel="Post"
+        className="mt-3"
+      />
 
       <ErrorMessage className="mt-2">{error}</ErrorMessage>
 
-      {isLoading && <p className="mt-4 text-sm">Loading comments…</p>}
+      {isLoading && (
+        <ul className="mt-4 space-y-4" aria-busy="true" aria-label="Loading comments">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <li key={i}>
+              <CommentRowSkeleton />
+            </li>
+          ))}
+        </ul>
+      )}
 
       {!isLoading && comments.length === 0 && (
         <p className="mt-4 text-sm text-[#241E1A]/60 dark:text-flour/60">
@@ -170,22 +132,22 @@ export function CommentThread({ commentableType, commentableId }: CommentThreadP
           <li key={comment.id}>
             <CommentRow
               comment={comment}
-              currentUserId={currentUser?.id ?? null}
+              currentUserId={currentUserId}
               onDelete={() => deleteComment(comment.id)}
               onReply={() => setReplyingTo(replyingTo === comment.id ? null : comment.id)}
             />
 
             {replyingTo === comment.id && (
-              <div className="mt-2 ml-8 flex gap-2">
-                <input
+              <div className="mt-2 ml-8">
+                <CommentComposer
                   value={replyBody}
-                  onChange={(e) => setReplyBody(e.target.value)}
+                  onChange={setReplyBody}
+                  onSubmit={() => postComment(replyBody, comment.id)}
+                  isPosting={isPosting}
                   placeholder={`Reply to @${comment.author?.username ?? 'them'}...`}
-                  className="flex-1 rounded-sm border border-copper/30 bg-transparent px-3 py-2 text-sm"
+                  submitLabel="Reply"
+                  autoFocus
                 />
-                <Button size="sm" onClick={() => postComment(replyBody, comment.id)}>
-                  Reply
-                </Button>
               </div>
             )}
 
@@ -195,8 +157,8 @@ export function CommentThread({ commentableType, commentableId }: CommentThreadP
                   <li key={reply.id}>
                     <CommentRow
                       comment={reply}
-                      currentUserId={currentUser?.id ?? null}
-                      onDelete={() => deleteComment(reply.id, comment.id)}
+                      currentUserId={currentUserId}
+                      onDelete={() => deleteComment(reply.id)}
                     />
                   </li>
                 ))}
@@ -205,6 +167,54 @@ export function CommentThread({ commentableType, commentableId }: CommentThreadP
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+function CommentComposer({
+  value,
+  onChange,
+  onSubmit,
+  isPosting,
+  placeholder,
+  submitLabel,
+  autoFocus,
+  className,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit: () => void;
+  isPosting: boolean;
+  placeholder: string;
+  submitLabel: string;
+  autoFocus?: boolean;
+  className?: string;
+}) {
+  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
+    // Comments are short-form but occasionally multi-line, so this is a
+    // textarea rather than a single-line input — Enter submits (matching
+    // what a single-line input would have done), Shift+Enter adds a line.
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      onSubmit();
+    }
+  }
+
+  return (
+    <div className={cn('flex gap-2', className)}>
+      <textarea
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        disabled={isPosting}
+        autoFocus={autoFocus}
+        rows={1}
+        className="flex-1 resize-none rounded-sm border border-copper/30 bg-transparent px-3 py-2 text-sm disabled:opacity-60"
+      />
+      <Button size="sm" isLoading={isPosting} onClick={onSubmit}>
+        {submitLabel}
+      </Button>
     </div>
   );
 }
