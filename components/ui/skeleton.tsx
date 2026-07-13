@@ -20,6 +20,22 @@ export function RecipeCardSkeleton() {
   );
 }
 
+/** A full grid of RecipeCardSkeleton — saved/page.tsx already imports this
+    name but it was never actually added when RecipeCardSkeleton was. */
+export function RecipeGridSkeleton({ count = 8 }: { count?: number }) {
+  return (
+    <div
+      className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4"
+      aria-busy="true"
+      aria-label="Loading recipes"
+    >
+      {Array.from({ length: count }).map((_, i) => (
+        <RecipeCardSkeleton key={i} />
+      ))}
+    </div>
+  );
+}
+
 /** Placeholder shaped like a notification row. */
 export function NotificationRowSkeleton() {
   return (
