@@ -34,46 +34,34 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   isLoading?: boolean;
-  /** Overrides the default Spinner + "Please wait". For a loading moment
-      that deserves more personality than the default — most callers
-      should leave this alone. */
-  loadingIndicator?: React.ReactNode;
   asChild?: boolean;
+  /**
+   * Overrides the default "Spinner + Please wait" loading content — for a
+   * "big moment" CTA (onboarding's Continue, a recipe's Publish) that's
+   * worth more personality than the plain default. See LoadingDial.
+   */
+  loadingContent?: React.ReactNode;
 }
 
-const DefaultLoadingContent = (
-  <span className="inline-flex items-center gap-2">
-    <Spinner size={16} />
-    Please wait
-  </span>
-);
-
-/**
- * Three dots bubbling at staggered delays — opt-in via loadingIndicator for
- * a specific button that wants more personality than the default.
- */
-export const SimmerDots = (
-  <span className="inline-flex items-center gap-1" aria-hidden="true">
-    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.3s]" />
-    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current [animation-delay:-0.15s]" />
-    <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-current" />
-  </span>
-);
-
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, isLoading, loadingIndicator, asChild, children, disabled, ...props }, ref) => {
+  ({ className, variant, size, isLoading, asChild, loadingContent, children, disabled, ...props }, ref) => {
     const Comp = asChild ? Slot : 'button';
 
-    // asChild wraps a single caller-provided element (e.g. <Link>) — Slot
-    // clones Button's props onto whatever single child it receives. Once
-    // isLoading swaps that child for the loading span instead, the actual
-    // <Link> (its href, its own children) silently vanishes rather than
-    // erroring, which is worse: nothing crashes, the button just quietly
-    // stops navigating anywhere. So: asChild always passes `children`
-    // through untouched — disabled/aria-busy still apply — and the loading
-    // treatment only replaces content on the plain-button path, where
-    // there's no wrapped element to lose.
-    const content = asChild ? children : isLoading ? (loadingIndicator ?? DefaultLoadingContent) : children;
+    // Exactly one child expression, always — `Slot` (used via `asChild`)
+    // requires a single React element child to clone its props onto.
+    // Splitting the spinner and label into sibling expressions broke that
+    // in an earlier draft of this component; wrapping both in one <span>
+    // here keeps it to one child either way.
+    const content = isLoading ? (
+      loadingContent ?? (
+        <span className="inline-flex items-center gap-2">
+          <Spinner size={16} />
+          Please wait
+        </span>
+      )
+    ) : (
+      children
+    );
 
     return (
       <Comp
