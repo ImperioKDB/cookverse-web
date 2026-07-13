@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { apiFetch } from '@/lib/api-client';
 import { Button } from '@/components/ui/button';
 import { ErrorMessage } from '@/components/ui/error-message';
+import { NotificationRowSkeleton } from '@/components/ui/skeleton';
 import { relativeTime } from '@/lib/format';
 
 interface Notification {
@@ -99,7 +100,13 @@ export default function NotificationsPage() {
 
       <ErrorMessage className="mt-4">{error}</ErrorMessage>
 
-      {isLoading && <p className="mt-6 text-sm">Loading…</p>}
+      {isLoading && (
+        <div className="mt-4 divide-y divide-copper/15" aria-busy="true" aria-label="Loading notifications">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <NotificationRowSkeleton key={i} />
+          ))}
+        </div>
+      )}
 
       {!isLoading && notifications.length === 0 && (
         <p className="mt-6 text-sm text-[#241E1A]/60 dark:text-flour/60">
