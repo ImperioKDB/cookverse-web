@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { apiFetch } from '@/lib/api-client';
 import { RecipeCard } from '@/components/recipe/RecipeCard';
 import { RecipeGridSkeleton } from '@/components/ui/skeleton';
+import { ErrorMessage } from '@/components/ui/error-message';
 import { Button } from '@/components/ui/button';
 import type { RecipeCardData } from '@/lib/types';
 
@@ -42,11 +43,7 @@ export default function FeedPage() {
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
-      {error && (
-        <p role="alert" className="text-sm text-chili">
-          {error}
-        </p>
-      )}
+      <ErrorMessage>{error}</ErrorMessage>
 
       {isLoading && recipes.length === 0 && <RecipeGridSkeleton />}
 
