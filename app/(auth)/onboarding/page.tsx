@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch } from '@/lib/api-client';
-import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { ChipRowSkeleton } from '@/components/ui/skeleton';
+import { AvatarUpload } from '@/components/profile/AvatarUpload';
+import { ErrorMessage } from '@/components/ui/error-message';
 import { cn } from '@/lib/utils';
 
 const SKILL_LEVELS = [
@@ -27,6 +28,7 @@ interface Cuisine {
 export default function OnboardingPage() {
   const router = useRouter();
   const [fullName, setFullName] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [skillLevel, setSkillLevel] = useState<SkillLevel>('beginner');
   const [cuisines, setCuisines] = useState<Cuisine[]>([]);
   const [selectedCuisineIds, setSelectedCuisineIds] = useState<string[]>([]);
@@ -34,11 +36,6 @@ export default function OnboardingPage() {
   const [cuisinesError, setCuisinesError] = useState<string | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-
-  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
-  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
-  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
-  const [avatarError, setAvatarError] = useState<string | null>(null);
 
   useEffect(() => {
     apiFetch<{ cuisines: Cuisine[] }>('/v1/cuisines')
@@ -51,35 +48,6 @@ export default function OnboardingPage() {
     setSelectedCuisineIds((current) =>
       current.includes(id) ? current.filter((c) => c !== id) : [...current, id]
     );
-  }
-
-  async function handleAvatarChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
-
-    setAvatarPreviewUrl(URL.createObjectURL(file)); // instant preview, don't wait on the upload
-    setIsUploadingAvatar(true);
-    setAvatarError(null);
-
-    try {
-      const { signedUrl, path } = await apiFetch<{ signedUrl: string; path: string }>(
-        '/v1/profiles/me/avatar/upload-url',
-        { method: 'POST', body: JSON.stringify({ filename: file.name }) }
-      );
-
-      const supabase = createClient();
-      const { error: uploadError } = await supabase.storage
-        .from('avatars')
-        .uploadToSignedUrl(path, new URL(signedUrl).searchParams.get('token') ?? '', file);
-      if (uploadError) throw uploadError;
-
-      const { data: publicUrlData } = supabase.storage.from('avatars').getPublicUrl(path);
-      setAvatarUrl(publicUrlData.publicUrl);
-    } catch (err) {
-      setAvatarError(err instanceof Error ? err.message : 'Photo upload failed — you can add one later');
-    } finally {
-      setIsUploadingAvatar(false);
-    }
   }
 
   async function handleSubmit(event: React.FormEvent) {
@@ -117,24 +85,15 @@ export default function OnboardingPage() {
 
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="flex items-center gap-4">
-          <label
-            htmlFor="avatar"
-            className="relative flex h-16 w-16 shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-full border border-copper/30 bg-copper/10"
-          >
-            {avatarPreviewUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element -- local object URL, not worth Next/Image here
-              <img src={avatarPreviewUrl} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <span className="text-xs text-[#241E1A]/50 dark:text-flour/50">Add photo</span>
-            )}
-            <input
-              id="avatar"
-              type="file"
-              accept="image/*"
-              onChange={handleAvatarChange}
-              className="sr-only"
-            />
-          </label>
+          {/* AvatarUpload already handles its own upload flow, preview, and
+              error state end to end — onboarding just needs the resulting
+              URL for the final submit below. */}
+          <AvatarUpload
+            initialAvatarUrl={null}
+            displayName={fullName || 'You'}
+            onUploaded={setAvatarUrl}
+            size="lg"
+          />
           <div className="flex-1">
             <label htmlFor="fullName" className="block text-sm font-medium">
               Your name
@@ -146,8 +105,6 @@ export default function OnboardingPage() {
               placeholder="What should we call you?"
               className="mt-1 w-full rounded-sm border border-copper/30 bg-transparent px-3 py-2 text-base"
             />
-            {isUploadingAvatar && <p className="mt-1 text-xs">Uploading photo…</p>}
-            {avatarError && <p className="mt-1 text-xs text-chili">{avatarError}</p>}
           </div>
         </div>
 
@@ -175,11 +132,7 @@ export default function OnboardingPage() {
 
         <fieldset>
           <legend className="text-sm font-medium">Favorite cuisines (optional)</legend>
-          {cuisinesError && (
-            <p role="alert" className="mt-2 text-sm text-chili">
-              {cuisinesError}
-            </p>
-          )}
+          <ErrorMessage className="mt-2">{cuisinesError}</ErrorMessage>
           <div className="mt-2">
             {cuisinesLoading ? (
               <ChipRowSkeleton />
@@ -207,11 +160,7 @@ export default function OnboardingPage() {
           </div>
         </fieldset>
 
-        {submitError && (
-          <p role="alert" className="text-sm text-chili">
-            {submitError}
-          </p>
-        )}
+        <ErrorMessage>{submitError}</ErrorMessage>
 
         <Button type="submit" isLoading={isLoading} className="w-full">
           Continue
