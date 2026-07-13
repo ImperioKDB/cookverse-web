@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { X } from 'lucide-react';
 import { apiFetch } from '@/lib/api-client';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
 import { DifficultyDial } from '@/components/ui/doneness-dial';
-import { ErrorMessage } from '@/components/ui/error-message';
 import { cn } from '@/lib/utils';
 import type { Difficulty, RecipeIngredient, RecipeStep } from '@/lib/types';
 
@@ -133,17 +134,41 @@ export default function NewRecipePage() {
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8 pb-28">
-      <p className="font-mono text-sm text-[#241E1A]/60 dark:text-flour/60">
-        Step {stepIndex + 1} of {STEPS.length} · {STEPS[stepIndex]}
-      </p>
-      <div className="mt-2 h-1 w-full rounded-full bg-copper/15">
-        <div
-          className="h-1 rounded-full bg-chili transition-all"
-          style={{ width: `${((stepIndex + 1) / STEPS.length) * 100}%` }}
-        />
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex-1">
+          <p className="font-mono text-sm text-[#241E1A]/60 dark:text-flour/60">
+            Step {stepIndex + 1} of {STEPS.length} · {STEPS[stepIndex]}
+          </p>
+          <div className="mt-2 h-1 w-full rounded-full bg-copper/15">
+            <div
+              className="h-1 rounded-full bg-chili transition-all"
+              style={{ width: `${((stepIndex + 1) / STEPS.length) * 100}%` }}
+            />
+          </div>
+        </div>
+        <Link
+          href="/feed"
+          aria-label="Exit recipe creation"
+          onClick={(e) => {
+            // Only ask if there's something a person would actually be
+            // upset to lose — an untouched draft (still on step 1, no
+            // title typed) isn't worth a confirmation dialog.
+            const hasContent = stepIndex > 0 || title.trim().length > 0;
+            if (hasContent && !window.confirm('Leave without finishing? Your progress is saved as a draft.')) {
+              e.preventDefault();
+            }
+          }}
+          className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-sm text-[#241E1A]/60 hover:bg-copper/10 dark:text-flour/60"
+        >
+          <X className="h-5 w-5" strokeWidth={1.5} />
+        </Link>
       </div>
 
-      <ErrorMessage className="mt-4">{error}</ErrorMessage>
+      {error && (
+        <p role="alert" className="mt-4 text-sm text-chili">
+          {error}
+        </p>
+      )}
 
       {stepIndex === 0 && (
         <div className="mt-6 space-y-4">
