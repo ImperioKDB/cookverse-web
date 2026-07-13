@@ -1,10 +1,10 @@
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
-import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { FollowButton } from '@/components/social/FollowButton';
-import { AvatarUpload } from '@/components/profile/AvatarUpload';
 import { RecipeCard } from '@/components/recipe/RecipeCard';
+import { AvatarUpload } from '@/components/profile/AvatarUpload';
+import { LogoutButton } from '@/components/profile/LogoutButton';
 import type { RecipeCardData } from '@/lib/types';
 
 interface Profile {
@@ -38,21 +38,22 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
     data: { session },
   } = await supabase.auth.getSession();
 
-  const profile = await fetchJson<Profile>(`/v1/profiles/${username}`, session?.access_token);
+  const [profile, recipesData] = await Promise.all([
+    fetchJson<Profile>(`/v1/profiles/${username}`, session?.access_token),
+    fetchJson<{ recipes: RecipeCardData[] }>(`/v1/recipes?author=${username}&sort=new`, session?.access_token),
+  ]);
   if (!profile) notFound();
 
   const isOwnProfile = session?.user.id === profile.id;
-
-  const recipesData = await fetchJson<{ recipes: RecipeCardData[] }>(
-    `/v1/recipes?author=${username}&sort=new`,
-    session?.access_token
-  );
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="flex items-start gap-4">
         {isOwnProfile ? (
-          <AvatarUpload initialAvatarUrl={profile.avatar_url} displayName={profile.full_name || profile.username} />
+          <AvatarUpload
+            initialAvatarUrl={profile.avatar_url}
+            displayName={profile.full_name || profile.username}
+          />
         ) : (
           <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full bg-copper/10">
             {profile.avatar_url ? (
@@ -77,11 +78,7 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
         {!isOwnProfile && (
           <FollowButton username={profile.username} initialFollowing={profile.is_following} />
         )}
-        {isOwnProfile && (
-          <Link href="/saved" className="text-sm font-medium text-chili">
-            Saved recipes →
-          </Link>
-        )}
+        {isOwnProfile && <LogoutButton />}
       </div>
 
       <h2 className="mt-8 font-display text-xl">Recipes</h2>
