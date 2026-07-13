@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
+import { ErrorMessage } from '@/components/ui/error-message';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -82,11 +83,7 @@ export default function LoginPage() {
           />
         </div>
 
-        {error && (
-          <p role="alert" className="text-sm text-chili">
-            {error}
-          </p>
-        )}
+        <ErrorMessage>{error}</ErrorMessage>
 
         <Button type="submit" isLoading={isLoading} className="w-full">
           Log in
