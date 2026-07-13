@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { apiFetch } from '@/lib/api-client';
 import { RecipeCard } from '@/components/recipe/RecipeCard';
 import { RecipeGridSkeleton } from '@/components/ui/skeleton';
+import { ErrorMessage } from '@/components/ui/error-message';
 import { Button } from '@/components/ui/button';
 import type { RecipeCardData } from '@/lib/types';
 
@@ -24,11 +25,7 @@ export default function SavedRecipesPage() {
     <div className="mx-auto max-w-5xl px-4 py-8">
       <h1 className="font-display text-3xl">Saved</h1>
 
-      {error && (
-        <p role="alert" className="mt-4 text-sm text-chili">
-          {error}
-        </p>
-      )}
+      <ErrorMessage className="mt-4">{error}</ErrorMessage>
 
       {isLoading && <RecipeGridSkeleton />}
 
