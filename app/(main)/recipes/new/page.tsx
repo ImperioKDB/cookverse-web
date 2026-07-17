@@ -1,367 +1,308 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { apiFetch } from '@/lib/api-client';
-import { createClient } from '@/lib/supabase/client';
 import { Button } from '@/components/ui/button';
-import { DifficultyDial } from '@/components/ui/doneness-dial';
 import { ErrorMessage } from '@/components/ui/error-message';
-import { cn } from '@/lib/utils';
-import type { Difficulty, RecipeIngredient, RecipeStep } from '@/lib/types';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Toast, useToast } from '@/components/ui/toast';
+import { EditorStepIndicator } from '@/components/recipe/editor/EditorStepIndicator';
+import {
+  StepBasics,
+  StepIngredients,
+  StepInstructions,
+  StepMedia,
+  StepNutrition,
+  StepPreview,
+  StepTimeServings,
+  StepVisibility,
+} from '@/components/recipe/editor/steps';
+import type { Difficulty, RecipeIngredient, RecipeNutrition, RecipeStep, Visibility } from '@/lib/types';
 
-const STEPS = ['Basics', 'Ingredients', 'Steps', 'Time & Nutrition', 'Preview'] as const;
-const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard', 'expert'];
+const STEP_LABELS = [
+  'Basics',
+  'Ingredients',
+  'Steps',
+  'Time & servings',
+  'Media',
+  'Nutrition',
+  'Visibility',
+  'Preview',
+  'Publish',
+] as const;
+
+const LAST_STEP = STEP_LABELS.length - 1;
+const PREVIEW_STEP = STEP_LABELS.length - 2;
+
+interface DraftState {
+  id: string | null;
+  slug: string | null;
+  title: string;
+  description: string;
+  cuisine_id: string | null;
+  difficulty: Difficulty;
+  cover_image_url: string | null;
+  prep_time_minutes: number | null;
+  cook_time_minutes: number | null;
+  servings: number;
+  ingredients: RecipeIngredient[];
+  steps: RecipeStep[];
+  nutrition: RecipeNutrition;
+  visibility: Visibility;
+}
+
+const EMPTY_DRAFT: DraftState = {
+  id: null,
+  slug: null,
+  title: '',
+  description: '',
+  cuisine_id: null,
+  difficulty: 'easy',
+  cover_image_url: null,
+  prep_time_minutes: null,
+  cook_time_minutes: null,
+  servings: 4,
+  ingredients: [],
+  steps: [],
+  nutrition: {},
+  visibility: 'public',
+};
+
+// Each step PATCHes only the fields it owns — matches the one-flexible-PATCH
+// pattern in recipes.schema.ts's updateRecipeSchema, same convention every
+// other multi-step form in this app already follows (onboarding, etc.).
+function fieldsForStep(stepIndex: number, draft: DraftState): Record<string, unknown> {
+  switch (stepIndex) {
+    case 0: // Basics
+      return {
+        title: draft.title.trim() || 'Untitled recipe',
+        description: draft.description || null,
+        cuisine_id: draft.cuisine_id,
+        difficulty: draft.difficulty,
+      };
+    case 1: // Ingredients
+      return { ingredients: draft.ingredients.filter((i) => i.name.trim()) };
+    case 2: // Steps
+      return { steps: draft.steps.filter((s) => s.instruction.trim()) };
+    case 3: // Time & servings
+      return {
+        prep_time_minutes: draft.prep_time_minutes,
+        cook_time_minutes: draft.cook_time_minutes,
+        servings: draft.servings,
+      };
+    case 4: // Media
+      return { cover_image_url: draft.cover_image_url };
+    case 5: { // Nutrition
+      const hasAnyValue = Object.values(draft.nutrition).some((v) => v !== null && v !== undefined);
+      return { nutrition: hasAnyValue ? draft.nutrition : null };
+    }
+    case 6: // Visibility
+      return { visibility: draft.visibility };
+    default:
+      return {};
+  }
+}
 
 export default function NewRecipePage() {
   const router = useRouter();
-  const [recipeId, setRecipeId] = useState<string | null>(null);
-  const [slug, setSlug] = useState<string | null>(null);
+  const [draft, setDraft] = useState<DraftState>(EMPTY_DRAFT);
   const [stepIndex, setStepIndex] = useState(0);
+  const [isCreatingDraft, setIsCreatingDraft] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const createdRef = useRef(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const isDirtyRef = useRef(false);
+  const { toast, showToast, dismissToast } = useToast();
 
-  // Basics
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [difficulty, setDifficulty] = useState<Difficulty>('easy');
-  const [coverImageUrl, setCoverImageUrl] = useState<string | null>(null);
-  const [isUploadingCover, setIsUploadingCover] = useState(false);
-
-  // Ingredients / Steps
-  const [ingredients, setIngredients] = useState<RecipeIngredient[]>([{ name: '' }]);
-  const [steps, setSteps] = useState<RecipeStep[]>([{ instruction: '' }]);
-
-  // Time & nutrition
-  const [prepTime, setPrepTime] = useState<number | ''>('');
-  const [cookTime, setCookTime] = useState<number | ''>('');
-  const [servings, setServings] = useState(4);
-  const [calories, setCalories] = useState<number | ''>('');
-
-  // Create the draft the moment someone lands on this page — every step
-  // after this just PATCHes it. See 06-design-system.md, "Forms & feedback".
+  // Create the draft row immediately on mount — per 06-design-system.md's
+  // autosave rule, nothing here waits on an explicit "Save Draft" tap.
   useEffect(() => {
-    if (createdRef.current) return;
-    createdRef.current = true;
-
-    apiFetch<{ id: string; slug: string }>('/v1/recipes', { method: 'POST', body: JSON.stringify({}) })
+    let cancelled = false;
+    apiFetch<{ id: string; slug: string; status: string }>('/v1/recipes', {
+      method: 'POST',
+      body: JSON.stringify({}),
+    })
       .then((data) => {
-        setRecipeId(data.id);
-        setSlug(data.slug);
+        if (cancelled) return;
+        setDraft((d) => ({ ...d, id: data.id, slug: data.slug }));
       })
-      .catch((err) => setError(err instanceof Error ? err.message : 'Could not start a new recipe'));
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Could not start a new recipe');
+      })
+      .finally(() => {
+        if (!cancelled) setIsCreatingDraft(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  async function saveStep(fields: Record<string, unknown>) {
-    if (!recipeId) return;
+  function updateDraft(patch: Partial<DraftState>) {
+    isDirtyRef.current = true;
+    setDraft((d) => ({ ...d, ...patch }));
+  }
+
+  const saveCurrentStep = useCallback(async (): Promise<boolean> => {
+    if (!draft.id) return false;
     setIsSaving(true);
     setError(null);
     try {
-      await apiFetch(`/v1/recipes/${recipeId}`, { method: 'PATCH', body: JSON.stringify(fields) });
+      await apiFetch(`/v1/recipes/${draft.id}`, {
+        method: 'PATCH',
+        body: JSON.stringify(fieldsForStep(stepIndex, draft)),
+      });
+      isDirtyRef.current = false;
+      return true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not save — try again');
-      throw err;
+      setError(err instanceof Error ? err.message : 'Could not save this step — try again');
+      return false;
     } finally {
       setIsSaving(false);
     }
+  }, [draft, stepIndex]);
+
+  async function goNext() {
+    const ok = await saveCurrentStep();
+    if (!ok) return;
+    setStepIndex((i) => Math.min(i + 1, LAST_STEP));
   }
 
-  async function handleNext() {
-    try {
-      if (stepIndex === 0) {
-        await saveStep({ title, description, difficulty });
-      } else if (stepIndex === 1) {
-        await saveStep({ ingredients: ingredients.filter((i) => i.name.trim()) });
-      } else if (stepIndex === 2) {
-        await saveStep({ steps: steps.filter((s) => s.instruction.trim()) });
-      } else if (stepIndex === 3) {
-        await saveStep({
-          prep_time_minutes: prepTime === '' ? null : prepTime,
-          cook_time_minutes: cookTime === '' ? null : cookTime,
-          servings,
-          nutrition: calories === '' ? null : { calories },
-        });
-      }
-      setStepIndex((i) => Math.min(STEPS.length - 1, i + 1));
-    } catch {
-      // error state already set by saveStep — stay on this step
-    }
+  function goBack() {
+    setStepIndex((i) => Math.max(i - 1, 0));
   }
 
-  async function handleCoverUpload(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file || !recipeId) return;
-
-    setIsUploadingCover(true);
-    setError(null);
-    try {
-      const { signedUrl, path } = await apiFetch<{ signedUrl: string; path: string }>(
-        `/v1/recipes/${recipeId}/media/upload-url`,
-        { method: 'POST', body: JSON.stringify({ filename: file.name }) }
-      );
-
-      const supabase = createClient();
-      const { error: uploadError } = await supabase.storage
-        .from('recipe-media')
-        .uploadToSignedUrl(path, new URL(signedUrl).searchParams.get('token') ?? '', file);
-      if (uploadError) throw uploadError;
-
-      const { data: publicUrlData } = supabase.storage.from('recipe-media').getPublicUrl(path);
-      setCoverImageUrl(publicUrlData.publicUrl);
-      await saveStep({ cover_image_url: publicUrlData.publicUrl });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Cover photo upload failed');
-    } finally {
-      setIsUploadingCover(false);
+  function handleExitClick() {
+    if (isDirtyRef.current) {
+      setShowExitConfirm(true);
+    } else {
+      router.push('/feed');
     }
   }
 
   async function handlePublish() {
-    if (!recipeId) return;
-    setIsSaving(true);
+    if (!draft.id) return;
+
+    const ok = await saveCurrentStep();
+    if (!ok) return;
+
+    setIsPublishing(true);
     setError(null);
     try {
-      await apiFetch(`/v1/recipes/${recipeId}/publish`, { method: 'POST' });
-      router.push(`/recipes/${slug}`);
+      const published = await apiFetch<{ slug: string }>(`/v1/recipes/${draft.id}/publish`, { method: 'POST' });
+      showToast('Published');
+      router.push(`/recipes/${published.slug}`);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not publish yet');
+      setError(err instanceof Error ? err.message : "Could not publish — check the earlier steps for what's missing");
     } finally {
-      setIsSaving(false);
+      setIsPublishing(false);
     }
   }
 
-  return (
-    <div className="mx-auto max-w-2xl px-4 py-8 pb-28">
-      <div className="flex items-center justify-between">
-        {/* Separate from the step wizard's own Back button below — that one
-            only steps backward within the flow, and is disabled on step 1.
-            This is the actual way out of the flow entirely; the draft is
-            already saved via autosave, so there's nothing to lose by exiting. */}
-        <Link href="/feed" className="text-sm text-chili" aria-label="Exit recipe editor">
-          ← Exit
-        </Link>
-        <p className="font-mono text-sm text-[#241E1A]/60 dark:text-flour/60">
-          Step {stepIndex + 1} of {STEPS.length} · {STEPS[stepIndex]}
-        </p>
+  if (isCreatingDraft) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-16 text-center text-sm text-[#241E1A]/60 dark:text-flour/60">
+        Setting up your new recipe…
       </div>
-      <div className="mt-2 h-1 w-full rounded-full bg-copper/15">
-        <div
-          className="h-1 rounded-full bg-chili transition-all"
-          style={{ width: `${((stepIndex + 1) / STEPS.length) * 100}%` }}
-        />
+    );
+  }
+
+  if (!draft.id) {
+    return (
+      <div className="mx-auto max-w-3xl px-4 py-16 text-center">
+        <ErrorMessage>{error ?? 'Could not start a new recipe'}</ErrorMessage>
+      </div>
+    );
+  }
+
+  const isLastStep = stepIndex === LAST_STEP;
+  const isPreviewStep = stepIndex === PREVIEW_STEP;
+
+  return (
+    <div className="mx-auto max-w-3xl px-4 pb-28 pt-6">
+      <div className="flex items-center justify-between gap-3">
+        <EditorStepIndicator current={stepIndex} total={STEP_LABELS.length} label={STEP_LABELS[stepIndex]} />
+        {/* Persistent exit affordance, separate from the wizard's own step-back
+            button below — per 06-design-system.md, disabling step-back on
+            step 1 is not the same thing as a way out of the flow entirely. */}
+        <button type="button" onClick={handleExitClick} className="min-h-[44px] shrink-0 px-2 text-sm font-medium text-chili">
+          ← Exit
+        </button>
       </div>
 
       <ErrorMessage className="mt-4">{error}</ErrorMessage>
 
-      {stepIndex === 0 && (
-        <div className="mt-6 space-y-4">
-          <div>
-            <label className="block text-sm font-medium">Title</label>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="mt-1 w-full rounded-sm border border-copper/30 bg-transparent px-3 py-2 text-base"
-            />
+      <div className="mt-6">
+        {stepIndex === 0 && <StepBasics draft={draft} onChange={updateDraft} />}
+        {stepIndex === 1 && (
+          <StepIngredients ingredients={draft.ingredients} onChange={(ingredients) => updateDraft({ ingredients })} />
+        )}
+        {stepIndex === 2 && (
+          <StepInstructions recipeId={draft.id} steps={draft.steps} onChange={(steps) => updateDraft({ steps })} />
+        )}
+        {stepIndex === 3 && <StepTimeServings draft={draft} onChange={updateDraft} />}
+        {stepIndex === 4 && (
+          <StepMedia
+            recipeId={draft.id}
+            coverImageUrl={draft.cover_image_url}
+            onChange={(cover_image_url) => updateDraft({ cover_image_url })}
+          />
+        )}
+        {stepIndex === 5 && (
+          <StepNutrition nutrition={draft.nutrition} onChange={(nutrition) => updateDraft({ nutrition })} />
+        )}
+        {stepIndex === 6 && (
+          <StepVisibility visibility={draft.visibility} onChange={(visibility) => updateDraft({ visibility })} />
+        )}
+        {isPreviewStep && <StepPreview draft={draft} />}
+        {isLastStep && (
+          <div className="py-8 text-center">
+            <h2 className="font-display text-2xl">Ready to publish?</h2>
+            <p className="mt-2 text-sm text-[#241E1A]/60 dark:text-flour/60">
+              Your recipe stays saved as a draft either way — publish now, or come back to it later from your
+              profile.
+            </p>
           </div>
-          <div>
-            <label className="block text-sm font-medium">Description</label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className="mt-1 w-full rounded-sm border border-copper/30 bg-transparent px-3 py-2 text-base"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Cover photo</label>
-            <input type="file" accept="image/*" onChange={handleCoverUpload} className="mt-1 text-sm" />
-            {isUploadingCover && <p className="mt-1 text-xs">Uploading…</p>}
-            {coverImageUrl && <p className="mt-1 text-xs text-bay">Cover photo set.</p>}
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Difficulty</label>
-            <div className="mt-2 flex items-center gap-3">
-              {DIFFICULTIES.map((d) => (
-                <button
-                  key={d}
-                  onClick={() => setDifficulty(d)}
-                  className={cn(
-                    'flex flex-col items-center gap-1 rounded-sm border p-2',
-                    difficulty === d ? 'border-chili' : 'border-copper/30'
-                  )}
-                >
-                  <DifficultyDial difficulty={d} size={40} />
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {stepIndex === 1 && (
-        <div className="mt-6 space-y-3">
-          {ingredients.map((ingredient, index) => (
-            <div key={index} className="flex gap-2">
-              <input
-                placeholder="Quantity"
-                type="number"
-                value={ingredient.quantity ?? ''}
-                onChange={(e) => {
-                  const value = e.target.value === '' ? null : Number(e.target.value);
-                  setIngredients((current) =>
-                    current.map((ing, i) => (i === index ? { ...ing, quantity: value } : ing))
-                  );
-                }}
-                className="w-20 rounded-sm border border-copper/30 bg-transparent px-2 py-2 text-base"
-              />
-              <input
-                placeholder="Unit"
-                value={ingredient.unit ?? ''}
-                onChange={(e) =>
-                  setIngredients((current) =>
-                    current.map((ing, i) => (i === index ? { ...ing, unit: e.target.value } : ing))
-                  )
-                }
-                className="w-20 rounded-sm border border-copper/30 bg-transparent px-2 py-2 text-base"
-              />
-              <input
-                placeholder="Ingredient name"
-                value={ingredient.name}
-                onChange={(e) =>
-                  setIngredients((current) =>
-                    current.map((ing, i) => (i === index ? { ...ing, name: e.target.value } : ing))
-                  )
-                }
-                className="flex-1 rounded-sm border border-copper/30 bg-transparent px-3 py-2 text-base"
-              />
-              <button
-                onClick={() => setIngredients((current) => current.filter((_, i) => i !== index))}
-                className="text-chili"
-                aria-label="Remove ingredient"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => setIngredients((current) => [...current, { name: '' }])}
-          >
-            + Add ingredient
-          </Button>
-        </div>
-      )}
-
-      {stepIndex === 2 && (
-        <div className="mt-6 space-y-3">
-          {steps.map((step, index) => (
-            <div key={index} className="flex gap-2">
-              <span className="mt-2 font-mono text-sm">{index + 1}.</span>
-              <textarea
-                value={step.instruction}
-                onChange={(e) =>
-                  setSteps((current) =>
-                    current.map((s, i) => (i === index ? { ...s, instruction: e.target.value } : s))
-                  )
-                }
-                rows={2}
-                className="flex-1 rounded-sm border border-copper/30 bg-transparent px-3 py-2 text-base"
-              />
-              <button
-                onClick={() => setSteps((current) => current.filter((_, i) => i !== index))}
-                className="text-chili"
-                aria-label="Remove step"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-          <Button variant="secondary" size="sm" onClick={() => setSteps((current) => [...current, { instruction: '' }])}>
-            + Add step
-          </Button>
-        </div>
-      )}
-
-      {stepIndex === 3 && (
-        <div className="mt-6 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium">Prep time (min)</label>
-              <input
-                type="number"
-                value={prepTime}
-                onChange={(e) => setPrepTime(e.target.value === '' ? '' : Number(e.target.value))}
-                className="mt-1 w-full rounded-sm border border-copper/30 bg-transparent px-3 py-2 text-base"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium">Cook time (min)</label>
-              <input
-                type="number"
-                value={cookTime}
-                onChange={(e) => setCookTime(e.target.value === '' ? '' : Number(e.target.value))}
-                className="mt-1 w-full rounded-sm border border-copper/30 bg-transparent px-3 py-2 text-base"
-              />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Servings</label>
-            <input
-              type="number"
-              value={servings}
-              onChange={(e) => setServings(Number(e.target.value))}
-              className="mt-1 w-24 rounded-sm border border-copper/30 bg-transparent px-3 py-2 text-base"
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Calories per serving (optional)</label>
-            <input
-              type="number"
-              value={calories}
-              onChange={(e) => setCalories(e.target.value === '' ? '' : Number(e.target.value))}
-              className="mt-1 w-32 rounded-sm border border-copper/30 bg-transparent px-3 py-2 text-base"
-            />
-          </div>
-        </div>
-      )}
-
-      {stepIndex === 4 && (
-        <div className="mt-6 space-y-2">
-          <h2 className="font-display text-2xl">{title || 'Untitled recipe'}</h2>
-          <DifficultyDial difficulty={difficulty} size={40} />
-          <p className="text-sm">{description}</p>
-          <p className="font-mono text-sm">
-            {ingredients.filter((i) => i.name.trim()).length} ingredients ·{' '}
-            {steps.filter((s) => s.instruction.trim()).length} steps
-          </p>
-          <p className="text-sm text-[#241E1A]/60 dark:text-flour/60">
-            Ready to publish? This makes the recipe public.
-          </p>
-        </div>
-      )}
-
-      <div className="fixed inset-x-0 bottom-0 z-20 flex gap-2 border-t border-copper/20 bg-flour p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] dark:bg-char">
-        <Button
-          variant="secondary"
-          className="flex-1"
-          disabled={stepIndex === 0}
-          onClick={() => setStepIndex((i) => Math.max(0, i - 1))}
-        >
-          Back
-        </Button>
-        {stepIndex < STEPS.length - 1 ? (
-          <Button className="flex-1" isLoading={isSaving} onClick={handleNext}>
-            Save & continue
-          </Button>
-        ) : (
-          <Button className="flex-1" isLoading={isSaving} onClick={handlePublish}>
-            Publish
-          </Button>
         )}
       </div>
+
+      {/* lg:left-56 clears the sidebar, matching MainLayout's lg:ml-56 for
+          the content column — same pattern the mobile bottom nav uses. */}
+      <div className="fixed bottom-0 left-0 right-0 z-20 border-t border-copper/20 bg-flour p-4 dark:bg-char lg:left-56">
+        <div className="mx-auto flex max-w-3xl items-center gap-3">
+          {stepIndex > 0 && (
+            <Button variant="secondary" onClick={goBack} disabled={isSaving || isPublishing}>
+              Back
+            </Button>
+          )}
+          <div className="flex-1" />
+          {!isLastStep ? (
+            <Button onClick={goNext} isLoading={isSaving}>
+              Save &amp; continue
+            </Button>
+          ) : (
+            <Button onClick={handlePublish} isLoading={isPublishing}>
+              Publish
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <ConfirmDialog
+        open={showExitConfirm}
+        title="Discard unsaved changes?"
+        body="You have changes on this step that haven't been saved yet. Everything from earlier steps is already safe."
+        confirmLabel="Discard & exit"
+        cancelLabel="Keep editing"
+        onCancel={() => setShowExitConfirm(false)}
+        onConfirm={() => {
+          setShowExitConfirm(false);
+          router.push('/feed');
+        }}
+      />
+
+      <Toast toast={toast} onDismiss={dismissToast} />
     </div>
   );
 }
