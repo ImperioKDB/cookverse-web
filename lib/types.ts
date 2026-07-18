@@ -44,6 +44,24 @@ export interface RecipeNutrition {
   sodium_mg?: number | null;
 }
 
+export interface GamificationSummary {
+  xp: number;
+  level: number;
+  xp_into_level: number;
+  xp_for_next_level: number;
+  streak_current: number;
+  streak_longest: number;
+  last_checkin_date: string | null;
+}
+
+export interface CheckInResponse {
+  already_checked_in_today: boolean;
+  streak_current: number;
+  streak_longest: number;
+  xp_awarded: number;
+  xp: number;
+}
+
 export interface RecipeDetail extends RecipeCardData {
   author_id: string;
   description: string | null;

@@ -6,7 +6,8 @@ import { FollowButton } from '@/components/social/FollowButton';
 import { LogoutButton } from '@/components/social/LogoutButton';
 import { AvatarUpload } from '@/components/profile/AvatarUpload';
 import { RecipeCard } from '@/components/recipe/RecipeCard';
-import type { RecipeCardData } from '@/lib/types';
+import { XPRing } from '@/components/gamification/XPRing';
+import type { GamificationSummary, RecipeCardData } from '@/lib/types';
 
 interface Profile {
   id: string;
@@ -39,11 +40,12 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
     data: { session },
   } = await supabase.auth.getSession();
 
-  // Profile and recipes don't depend on each other — fetching them
-  // sequentially was doubling this page's load time for no reason.
-  const [profile, recipesData] = await Promise.all([
+  const [profile, recipesData, gamification] = await Promise.all([
     fetchJson<Profile>(`/v1/profiles/${username}`, session?.access_token),
     fetchJson<{ recipes: RecipeCardData[] }>(`/v1/recipes?author=${username}&sort=new`, session?.access_token),
+    session
+      ? fetchJson<GamificationSummary>('/v1/gamification/me', session.access_token)
+      : Promise.resolve(null),
   ]);
 
   if (!profile) notFound();
@@ -54,7 +56,17 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="flex items-start gap-4">
         {isOwnProfile ? (
-          <AvatarUpload initialAvatarUrl={profile.avatar_url} displayName={profile.full_name || profile.username} />
+          <div className="flex items-end gap-2">
+            <AvatarUpload initialAvatarUrl={profile.avatar_url} displayName={profile.full_name || profile.username} />
+            {gamification && (
+              <XPRing
+                level={gamification.level}
+                xpIntoLevel={gamification.xp_into_level}
+                xpForNextLevel={gamification.xp_for_next_level}
+                size={36}
+              />
+            )}
+          </div>
         ) : (
           <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full bg-copper/10">
             {profile.avatar_url ? (
@@ -79,8 +91,6 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
         {!isOwnProfile && <FollowButton username={profile.username} initialFollowing={profile.is_following} />}
       </div>
 
-      {/* Account actions get their own clearly-spaced row instead of being
-          squeezed into the header — that's what was cramped before. */}
       {isOwnProfile && (
         <div className="mt-4 flex items-center justify-between border-y border-copper/15 py-3">
           <Link href="/saved" className="text-sm font-medium text-chili">
