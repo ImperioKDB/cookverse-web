@@ -1,12 +1,14 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import Image from 'next/image';
 import { DifficultyDial, DonenessDial } from '@/components/ui/doneness-dial';
 import { Button } from '@/components/ui/button';
 import { LikeButton } from '@/components/social/LikeButton';
 import { SaveButton } from '@/components/social/SaveButton';
 import { CommentThread } from '@/components/social/CommentThread';
+import { AddToPlanDialog } from '@/components/mealplan/AddToPlanDialog';
+import { Toast, useToast } from '@/components/ui/toast';
 import type { RecipeDetail } from '@/lib/types';
 
 export function RecipeDetailClient({ recipe }: { recipe: RecipeDetail }) {
@@ -14,6 +16,8 @@ export function RecipeDetailClient({ recipe }: { recipe: RecipeDetail }) {
   const [checked, setChecked] = useState<Set<string>>(new Set());
   const [cookMode, setCookMode] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
+  const [showAddToPlan, setShowAddToPlan] = useState(false);
+  const { toast, showToast, dismissToast } = useToast();
 
   const scale = servings / recipe.servings;
 
@@ -171,12 +175,9 @@ export function RecipeDetailClient({ recipe }: { recipe: RecipeDetail }) {
         <CommentThread commentableType="recipe" commentableId={recipe.id} />
       </div>
 
-      {/* Sticky action bar: one primary action, two secondary — per the design
-          audit fix in 11-design-audit.md. Save is real now (Collections
-          shipped); Add to Plan stays disabled until meal planning exists. */}
       <div className="fixed inset-x-0 bottom-0 z-20 flex gap-2 border-t border-copper/20 bg-flour p-3 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] dark:bg-char lg:static lg:col-span-2 lg:mt-8 lg:border-0 lg:bg-transparent lg:p-0 lg:pb-0">
         <SaveButton recipeId={recipe.id} initialSaved={recipe.is_saved} className="flex-1" />
-        <Button variant="secondary" className="flex-1" disabled title="Coming soon">
+        <Button variant="secondary" className="flex-1" onClick={() => setShowAddToPlan(true)}>
           Add to Plan
         </Button>
         <Button
@@ -190,6 +191,16 @@ export function RecipeDetailClient({ recipe }: { recipe: RecipeDetail }) {
           Start Cooking
         </Button>
       </div>
+
+      <AddToPlanDialog
+        open={showAddToPlan}
+        recipeId={recipe.id}
+        recipeServings={recipe.servings}
+        onClose={() => setShowAddToPlan(false)}
+        onAdded={() => showToast('Added to your plan')}
+      />
+
+      <Toast toast={toast} onDismiss={dismissToast} />
     </div>
   );
 }

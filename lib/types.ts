@@ -44,6 +44,24 @@ export interface RecipeNutrition {
   sodium_mg?: number | null;
 }
 
+export type MealType = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+
+export interface MealPlanItem {
+  id: string;
+  plan_date: string;
+  meal_type: MealType;
+  servings: number;
+  created_at: string;
+  recipe: { id: string; title: string; slug: string; cover_image_url: string | null; servings: number } | null;
+}
+
+export interface GroceryItem {
+  name: string;
+  unit: string | null;
+  quantity: number | null;
+  sources: string[];
+}
+
 export interface GamificationSummary {
   xp: number;
   level: number;

@@ -93,9 +93,14 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
 
       {isOwnProfile && (
         <div className="mt-4 flex items-center justify-between border-y border-copper/15 py-3">
-          <Link href="/saved" className="text-sm font-medium text-chili">
-            Saved recipes →
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link href="/saved" className="text-sm font-medium text-chili">
+              Saved recipes →
+            </Link>
+            <Link href="/plan" className="text-sm font-medium text-chili">
+              Meal Plan →
+            </Link>
+          </div>
           <LogoutButton />
         </div>
       )}
