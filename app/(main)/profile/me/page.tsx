@@ -9,13 +9,14 @@ export default async function MyProfileRedirectPage() {
 
   if (!session) redirect('/login');
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:8080';
-  const response = await fetch(`${apiUrl}/v1/profiles/me`, {
-    headers: { Authorization: `Bearer ${session.access_token}` },
-    cache: 'no-store',
-  });
+  // profiles is public-read under RLS -- no need to round-trip through the
+  // Render API (which may be asleep, see gotcha #3) just for a username.
+  const { data: profile, error } = await supabase
+    .from('profiles')
+    .select('username')
+    .eq('id', session.user.id)
+    .maybeSingle();
 
-  if (!response.ok) redirect('/feed'); // API unreachable — don't dead-end on a blank page
-  const profile = await response.json();
+  if (error || !profile) redirect('/feed'); // API/DB unreachable -- don't dead-end
   redirect(`/profile/${profile.username}`);
 }

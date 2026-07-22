@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils';
 
 /**
- * Base pulse block — per 06-design-system.md, every skeleton matches its
+ * Base pulse block -- per 06-design-system.md, every skeleton matches its
  * real content's shape exactly (same aspect ratio, same rounded corners)
  * so nothing jumps when the real content resolves.
  */
@@ -43,6 +43,24 @@ export function RecipeGridSkeleton({ count = 8 }: { count?: number }) {
       {Array.from({ length: count }).map((_, i) => (
         <RecipeCardSkeleton key={i} />
       ))}
+    </div>
+  );
+}
+
+/** Matches the profile page header: avatar circle, name/username lines, stat row. */
+export function ProfileHeaderSkeleton() {
+  return (
+    <div className="flex items-start gap-4" aria-label="Loading profile" role="status">
+      <Pulse className="h-20 w-20 shrink-0 rounded-full" />
+      <div className="flex-1 space-y-2">
+        <Pulse className="h-7 w-40" />
+        <Pulse className="h-4 w-24" />
+        <div className="mt-2 flex gap-4">
+          <Pulse className="h-4 w-16" />
+          <Pulse className="h-4 w-20" />
+          <Pulse className="h-4 w-20" />
+        </div>
+      </div>
     </div>
   );
 }
