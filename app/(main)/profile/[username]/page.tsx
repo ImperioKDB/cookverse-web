@@ -1,9 +1,10 @@
 import { notFound } from 'next/navigation';
 import Image from 'next/image';
+import { Bookmark, CalendarDays } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/server';
 import { FollowButton } from '@/components/social/FollowButton';
-import { LogoutButton } from '@/components/social/LogoutButton';
+import { ProfileMenu } from '@/components/profile/ProfileMenu';
 import { AvatarUpload } from '@/components/profile/AvatarUpload';
 import { RecipeCard } from '@/components/recipe/RecipeCard';
 import { XPRing } from '@/components/gamification/XPRing';
@@ -54,61 +55,95 @@ export default async function ProfilePage({ params }: { params: Promise<{ userna
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
+      {/* Header: avatar left, stat row right, overflow menu at the far
+          end for the owner -- structural layout matches the familiar
+          avatar/stats-row pattern, rendered in CookVerse's own tokens
+          (mono numerals, copper hairlines) rather than borrowing anyone
+          else's visual style. */}
       <div className="flex items-start gap-4">
-        {isOwnProfile ? (
-          <div className="flex items-end gap-2">
+        <div className="flex items-end gap-2">
+          {isOwnProfile ? (
             <AvatarUpload initialAvatarUrl={profile.avatar_url} displayName={profile.full_name || profile.username} />
-            {gamification && (
-              <XPRing
-                level={gamification.level}
-                xpIntoLevel={gamification.xp_into_level}
-                xpForNextLevel={gamification.xp_for_next_level}
-                size={36}
-              />
-            )}
+          ) : (
+            <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full bg-copper/10">
+              {profile.avatar_url ? (
+                <Image src={profile.avatar_url} alt={profile.username} fill className="object-cover" />
+              ) : (
+                <div className="flex h-full items-center justify-center font-display text-2xl text-copper/50">
+                  {profile.username.slice(0, 1).toUpperCase()}
+                </div>
+              )}
+            </div>
+          )}
+          {isOwnProfile && gamification && (
+            <XPRing
+              level={gamification.level}
+              xpIntoLevel={gamification.xp_into_level}
+              xpForNextLevel={gamification.xp_for_next_level}
+              size={36}
+            />
+          )}
+        </div>
+
+        <div className="flex flex-1 justify-around pt-2 font-mono">
+          <div className="text-center">
+            <p className="text-lg">{profile.recipe_count}</p>
+            <p className="text-xs text-[#241E1A]/60 dark:text-flour/60">recipes</p>
           </div>
-        ) : (
-          <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-full bg-copper/10">
-            {profile.avatar_url ? (
-              <Image src={profile.avatar_url} alt={profile.username} fill className="object-cover" />
-            ) : (
-              <div className="flex h-full items-center justify-center font-display text-2xl text-copper/50">
-                {profile.username.slice(0, 1).toUpperCase()}
-              </div>
-            )}
+          <div className="text-center">
+            <p className="text-lg">{profile.follower_count}</p>
+            <p className="text-xs text-[#241E1A]/60 dark:text-flour/60">followers</p>
           </div>
-        )}
-        <div className="flex-1">
-          <h1 className="font-display text-2xl">{profile.full_name || `@${profile.username}`}</h1>
-          <p className="text-sm text-[#241E1A]/60 dark:text-flour/60">@{profile.username}</p>
-          {profile.bio && <p className="mt-2 text-sm">{profile.bio}</p>}
-          <div className="mt-2 flex gap-4 font-mono text-sm">
-            <span>{profile.recipe_count} recipes</span>
-            <span>{profile.follower_count} followers</span>
-            <span>{profile.following_count} following</span>
+          <div className="text-center">
+            <p className="text-lg">{profile.following_count}</p>
+            <p className="text-xs text-[#241E1A]/60 dark:text-flour/60">following</p>
           </div>
         </div>
-        {!isOwnProfile && <FollowButton username={profile.username} initialFollowing={profile.is_following} />}
+
+        {isOwnProfile && <ProfileMenu />}
       </div>
 
-      {isOwnProfile && (
-        <div className="mt-4 flex items-center justify-between border-y border-copper/15 py-3">
-          <div className="flex items-center gap-4">
-            <Link href="/saved" className="text-sm font-medium text-chili">
-              Saved recipes →
+      <div className="mt-4">
+        <h1 className="font-display text-2xl">{profile.full_name || `@${profile.username}`}</h1>
+        <p className="text-sm text-[#241E1A]/60 dark:text-flour/60">@{profile.username}</p>
+        {profile.bio && <p className="mt-2 text-sm">{profile.bio}</p>}
+      </div>
+
+      <div className="mt-4 flex gap-2">
+        {isOwnProfile ? (
+          <>
+            <Link
+              href="/profile/edit"
+              className="flex min-h-[44px] flex-1 items-center justify-center rounded-sm border border-copper/40 text-sm font-medium hover:bg-copper/10"
+            >
+              Edit profile
             </Link>
-            <Link href="/plan" className="text-sm font-medium text-chili">
-              Meal Plan →
+            <Link
+              href="/saved"
+              aria-label="Saved recipes"
+              title="Saved recipes"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm border border-copper/40 hover:bg-copper/10"
+            >
+              <Bookmark className="h-5 w-5" strokeWidth={1.5} aria-hidden="true" />
             </Link>
-          </div>
-          <LogoutButton />
-        </div>
-      )}
+            <Link
+              href="/plan"
+              aria-label="Meal plan"
+              title="Meal plan"
+              className="flex min-h-[44px] min-w-[44px] items-center justify-center rounded-sm border border-copper/40 hover:bg-copper/10"
+            >
+              <CalendarDays className="h-5 w-5" strokeWidth={1.5} aria-hidden="true" />
+            </Link>
+          </>
+        ) : (
+          <FollowButton username={profile.username} initialFollowing={profile.is_following} />
+        )}
+      </div>
 
       <h2 className="mt-8 font-display text-xl">Recipes</h2>
       {!recipesData || recipesData.recipes.length === 0 ? (
         <p className="mt-2 text-sm text-[#241E1A]/60 dark:text-flour/60">
-          {isOwnProfile ? "You haven't published a recipe yet." : "Nothing published yet."}
+          {isOwnProfile ? "You haven't published a recipe yet." : 'Nothing published yet.'}
         </p>
       ) : (
         <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 lg:grid-cols-4">
